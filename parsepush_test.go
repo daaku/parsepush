@@ -349,7 +349,9 @@ func TestReadPushes(t *testing.T) {
 	givenPush1 := []byte("abc")
 	givenPush2 := []byte("def")
 	c := &Conn{
-		closeChan: make(chan chan struct{}),
+		clock:        clock.New(),
+		pingInterval: time.Minute,
+		closeChan:    make(chan chan struct{}),
 		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
 			return in, nil
 		},
@@ -374,8 +376,9 @@ func TestReadError(t *testing.T) {
 	var dialCount int32
 	in, out := net.Pipe()
 	c := &Conn{
-		clock:     clock.New(),
-		closeChan: make(chan chan struct{}),
+		clock:        clock.New(),
+		pingInterval: time.Minute,
+		closeChan:    make(chan chan struct{}),
 		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
 			switch atomic.AddInt32(&dialCount, 1) {
 			case 1:
@@ -405,6 +408,55 @@ func TestReadError(t *testing.T) {
 	ensure.DeepEqual(t, <-errs, givenDialErr)
 	ensure.Nil(t, c.Close())
 	ensure.True(t, atomic.LoadInt32(&dialCount) > 1)
+}
+
+func TestPingMessage(t *testing.T) {
+	errs := make(chan error, 2)
+	in, out := net.Pipe()
+	mockClock := clock.NewMock()
+	c := &Conn{
+		pingInterval: time.Minute,
+		clock:        mockClock,
+		closeChan:    make(chan chan struct{}),
+		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+			return in, nil
+		},
+		errHandler: func(err error) {
+			errs <- err
+		},
+	}
+	initDone := make(chan struct{})
+	pingDone1 := make(chan struct{})
+	pingDone2 := make(chan struct{})
+	go func() {
+		r := bufio.NewReader(out)
+
+		bytes, err := r.ReadBytes('\n')
+		ensure.Nil(t, err)
+		ensure.DeepEqual(t, len(bytes), 52)
+		close(initDone)
+
+		bytes, err = r.ReadBytes('\n')
+		ensure.Nil(t, err)
+		ensure.DeepEqual(t, bytes, pingMessage)
+		close(pingDone1)
+
+		bytes, err = r.ReadBytes('\n')
+		ensure.Nil(t, err)
+		ensure.DeepEqual(t, bytes, pingMessage)
+		close(pingDone2)
+
+		io.Copy(ioutil.Discard, r)
+	}()
+	go c.do()
+	<-initDone
+	mockClock.Add(c.pingInterval)
+	<-pingDone1
+	mockClock.Add(c.pingInterval)
+	<-pingDone2
+	ensure.Nil(t, c.Close())
+	close(errs)
+	ensure.Nil(t, <-errs)
 }
 
 type fReader func(p []byte) (n int, err error)

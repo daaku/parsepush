@@ -45,7 +45,6 @@ type Conn struct {
 	retry          func(int) time.Duration
 	closeOnce      sync.Once
 	closeChan      chan chan struct{}
-	pingTicker     clock.Ticker
 
 	// for testing purposes
 	clock clock.Clock
@@ -101,6 +100,8 @@ func (c *Conn) dial() net.Conn {
 func (c *Conn) do() {
 	var lr lineReader
 	var conn net.Conn
+	pingTicker := c.clock.Ticker(c.pingInterval)
+	defer pingTicker.Stop()
 
 	handleErr := func(err error) {
 		if err != nil {
@@ -134,7 +135,7 @@ func (c *Conn) do() {
 			c.pushHandler(push)
 		case err := <-lr.errch:
 			handleErr(err)
-		case <-c.pingTicker.C:
+		case <-pingTicker.C:
 			_, err := conn.Write(pingMessage)
 			handleErr(err)
 		case done := <-c.closeChan:
