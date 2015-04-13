@@ -1,5 +1,7 @@
 // Package parsepush provides a client for receiving pushes from the Parse Push
-// API. This is useful for building services that can accept pushes.
+// API. This is useful for building services that can receive pushes. With Go
+// being usable on certain embedded devices, this can serve as a useful library
+// for IoT devices.
 package parsepush
 
 import (
