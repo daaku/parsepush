@@ -1,6 +1,6 @@
 // +build integration
 
-package parsepush
+package parsepush_test
 
 import (
 	"crypto/rand"
@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daaku/parsepush"
 	"github.com/facebookgo/ensure"
 	"github.com/facebookgo/parse"
 )
@@ -68,13 +69,13 @@ func TestIntegrate(t *testing.T) {
 
 	// start client
 	pushes := make(chan []byte)
-	conn, err := NewConn(
-		ConnApplicationID(integrationApplicationID),
-		ConnInstallationID(installationID),
-		ConnPushHandler(func(raw []byte) {
+	conn, err := parsepush.NewConn(
+		parsepush.ConnApplicationID(integrationApplicationID),
+		parsepush.ConnInstallationID(installationID),
+		parsepush.ConnPushHandler(func(raw []byte) {
 			pushes <- raw
 		}),
-		ConnErrorHandler(func(err error) {
+		parsepush.ConnErrorHandler(func(err error) {
 			t.Fatal("unexpected error:", err)
 		}),
 	)
