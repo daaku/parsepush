@@ -63,6 +63,7 @@ func TestNewConnDefaults(t *testing.T) {
 	c, err := NewConn(
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
+		ConnPushHandler(func([]byte) {}),
 	)
 	ensure.Nil(t, err)
 	ensure.DeepEqual(t, c.addr, defaultAddr)
@@ -89,6 +90,7 @@ func TestConnRetryStrategy(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
+		ConnPushHandler(func([]byte) {}),
 		ConnRetryStrategy(func(int) time.Duration { return magic }),
 	)
 	ensure.Nil(t, err)
@@ -110,12 +112,22 @@ func TestConnPushHandler(t *testing.T) {
 	ensure.Nil(t, c.Close())
 }
 
+func TestConnPushHandlerMissing(t *testing.T) {
+	_, err := NewConn(
+		ConnAddr(fakeAddr),
+		ConnApplicationID("x"),
+		ConnInstallationID("x"),
+	)
+	ensure.DeepEqual(t, err, errMissingPushHandler)
+}
+
 func TestConnErrorHandler(t *testing.T) {
 	var called int32
 	c, err := NewConn(
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
+		ConnPushHandler(func([]byte) {}),
 		ConnErrorHandler(func(error) {
 			atomic.AddInt32(&called, 1)
 		}),
@@ -131,6 +143,7 @@ func TestConnDefaultLastHash(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
+		ConnPushHandler(func([]byte) {}),
 	)
 	ensure.Nil(t, err)
 	ensure.DeepEqual(t, c.LastHash(), "")
@@ -143,6 +156,7 @@ func TestConnConfiguredLastHash(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
+		ConnPushHandler(func([]byte) {}),
 		ConnLastHash(givenHash),
 	)
 	ensure.Nil(t, err)
@@ -156,6 +170,7 @@ func TestConnPingInterval(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
+		ConnPushHandler(func([]byte) {}),
 		ConnPingInterval(pingInterval),
 	)
 	ensure.Nil(t, err)
@@ -169,6 +184,7 @@ func TestConnDialer(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
+		ConnPushHandler(func([]byte) {}),
 		ConnDialer(d),
 	)
 	ensure.Nil(t, err)
@@ -182,6 +198,7 @@ func TestConnTLSConfig(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
+		ConnPushHandler(func([]byte) {}),
 		ConnTLSConfig(tc),
 	)
 	ensure.Nil(t, err)
@@ -195,6 +212,7 @@ func TestConnAddr(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
+		ConnPushHandler(func([]byte) {}),
 		ConnAddr(addr),
 	)
 	ensure.Nil(t, err)

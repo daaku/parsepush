@@ -26,6 +26,7 @@ const (
 var (
 	errMissingApplicationID  = errors.New("parsepush: missing Application ID")
 	errMissingInstallationID = errors.New("parsepush: missing Installation ID")
+	errMissingPushHandler    = errors.New("parsepush: missing Push Handler")
 
 	pingMessage = []byte("{}\r\n")
 )
@@ -260,7 +261,7 @@ func ConnRetryStrategy(s func(nth int) time.Duration) ConnOption {
 }
 
 // NewConn creates a new Conn with the given options. At minimum you need to
-// provide ConnApplicationID and ConnInstallationID.
+// provide ConnApplicationID, ConnInstallationID and ConnPushHandler.
 func NewConn(options ...ConnOption) (*Conn, error) {
 	c := Conn{
 		clock:     clock.New(),
@@ -283,6 +284,9 @@ func NewConn(options ...ConnOption) (*Conn, error) {
 	}
 	if c.installationID == "" {
 		return nil, errMissingInstallationID
+	}
+	if c.pushHandler == nil {
+		return nil, errMissingPushHandler
 	}
 	if c.dialer == nil {
 		c.dialer = &net.Dialer{
