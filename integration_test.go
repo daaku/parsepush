@@ -38,6 +38,7 @@ func uuid(t testing.TB) string {
 }
 
 func TestIntegrate(t *testing.T) {
+	// we' use github.com/facebookgo/parse for the API interactions
 	client := parse.Client{
 		Credentials: parse.RestAPIKey{
 			ApplicationID: integrationApplicationID,
@@ -45,7 +46,9 @@ func TestIntegrate(t *testing.T) {
 		},
 	}
 
-	expectedPushSubset := map[string]interface{}{"answer": "42"}
+	// push data is described at
+	// https://www.parse.com/docs/push_guide#options/REST
+	givenPushData := map[string]interface{}{"answer": "42"}
 
 	// create new installation
 	installationID := uuid(t)
@@ -58,16 +61,7 @@ func TestIntegrate(t *testing.T) {
 	ensure.Nil(t, err, "creating installation")
 	installationObjectID := res["objectId"]
 
-	/*
-		// delete installation
-		defer func() {
-			u := &url.URL{Path: path.Join("/1/installations", installationObjectID)}
-			_, err := client.Delete(u, nil)
-			ensure.Nil(t, err)
-		}()
-	*/
-
-	// start client
+	// start push receiver connection
 	pushes := make(chan []byte)
 	conn, err := parsepush.NewConn(
 		parsepush.ConnApplicationID(integrationApplicationID),
@@ -87,7 +81,7 @@ func TestIntegrate(t *testing.T) {
 	// send push
 	pushReq := map[string]interface{}{
 		"where": map[string]string{"objectId": installationObjectID},
-		"data":  expectedPushSubset,
+		"data":  givenPushData,
 	}
 	_, err = client.Post(&url.URL{Path: "/1/push"}, pushReq, nil)
 	ensure.Nil(t, err, "sending push")
@@ -97,7 +91,8 @@ func TestIntegrate(t *testing.T) {
 	close(pushes)
 	push := make(map[string]interface{})
 	ensure.Nil(t, json.Unmarshal(raw, &push))
-	ensure.Subset(t, push["data"], expectedPushSubset)
+	ensure.Subset(t, push["data"], givenPushData)
 
+	// close our push receiver and clean-up associated resources
 	conn.Close()
 }
