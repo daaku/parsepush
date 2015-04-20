@@ -152,7 +152,7 @@ func (c *Conn) do() {
 				break
 			}
 			if payload.Time > c.LastTime() {
-				ConnLastTime(payload.Time)(c)
+				c.lastTime.Store(payload.Time)
 			}
 			c.pushHandler(&payload)
 		case err := <-lr.errch:
@@ -242,7 +242,7 @@ func ConnInstallationID(id string) ConnOption {
 	}
 }
 
-// ConnLastSeen configures the timestamp of the last push we received. Although
+// ConnLastTime configures the timestamp of the last push we received. Although
 // this timestamp is currently an ISO8601 string, it should be treated as an
 // opaque string by the client. This ensures that we don't miss any relevant
 // pushes since the last disconnect.
