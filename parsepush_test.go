@@ -377,7 +377,6 @@ func TestReadPushes(t *testing.T) {
 		out.Write([]byte("\r\n"))
 	}()
 	ensure.DeepEqual(t, <-pushes, expectedPayload1)
-	ensure.DeepEqual(t, c.LastTime(), expectedPayload1.Time)
 	ensure.DeepEqual(t, <-pushes, expectedPayload2)
 	ensure.DeepEqual(t, c.LastTime(), expectedPayload2.Time)
 	ensure.Nil(t, c.Close())
