@@ -405,6 +405,29 @@ func TestPushInvalidJSON(t *testing.T) {
 	ensure.DeepEqual(t, atomic.LoadInt32(&dialCalls), int32(2))
 }
 
+func TestPingAndPush(t *testing.T) {
+	gotPush := make(chan struct{})
+	var dialCalls int32
+	in, out := net.Pipe()
+	c := &Conn{
+		clock:        clock.New(),
+		pingInterval: time.Minute,
+		closeChan:    make(chan chan struct{}),
+		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+			atomic.AddInt32(&dialCalls, 1)
+			return in, nil
+		},
+		pushHandler: func([]byte) { close(gotPush) },
+		errHandler:  func(error) { panic("never reached") },
+	}
+	go io.Copy(ioutil.Discard, out)
+	go c.do()
+	go out.Write([]byte("{}\r\n{\"data\":42}\r\n"))
+	<-gotPush
+	ensure.Nil(t, c.Close())
+	ensure.DeepEqual(t, atomic.LoadInt32(&dialCalls), int32(1))
+}
+
 func TestReadError(t *testing.T) {
 	errs := make(chan error, 2)
 	givenDialErr := errors.New("")
