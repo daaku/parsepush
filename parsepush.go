@@ -20,7 +20,7 @@ import (
 
 const (
 	defaultAddr          = "push.parse.com:443"
-	defaultPingInterval  = time.Minute
+	defaultPingInterval  = 10 * time.Minute
 	defaultDialerTimeout = time.Minute
 	defaultRetryInterval = 10 * time.Second
 )
