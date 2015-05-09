@@ -38,7 +38,7 @@ func uuid(t testing.TB) string {
 }
 
 func TestIntegrate(t *testing.T) {
-	// we' use github.com/facebookgo/parse for the API interactions
+	// we use github.com/facebookgo/parse for the API interactions
 	client := parse.Client{
 		Credentials: parse.RestAPIKey{
 			ApplicationID: integrationApplicationID,
