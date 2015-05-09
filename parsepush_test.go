@@ -63,7 +63,7 @@ func TestNewConnDefaults(t *testing.T) {
 	c, err := NewConn(
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) {}),
+		ConnPushHandler(func([]byte) {}),
 	)
 	ensure.Nil(t, err)
 	ensure.DeepEqual(t, c.addr, defaultAddr)
@@ -90,7 +90,7 @@ func TestConnRetryStrategy(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) {}),
+		ConnPushHandler(func([]byte) {}),
 		ConnRetryStrategy(func(int) time.Duration { return magic }),
 	)
 	ensure.Nil(t, err)
@@ -104,7 +104,7 @@ func TestConnPushHandler(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) { called = true }),
+		ConnPushHandler(func([]byte) { called = true }),
 	)
 	ensure.Nil(t, err)
 	c.pushHandler(nil)
@@ -127,7 +127,7 @@ func TestConnErrorHandler(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) {}),
+		ConnPushHandler(func([]byte) {}),
 		ConnErrorHandler(func(error) {
 			atomic.AddInt32(&called, 1)
 		}),
@@ -143,7 +143,7 @@ func TestConnDefaultLastHash(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) {}),
+		ConnPushHandler(func([]byte) {}),
 	)
 	ensure.Nil(t, err)
 	ensure.DeepEqual(t, c.LastTime(), "")
@@ -156,7 +156,7 @@ func TestConnConfiguredLastTime(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) {}),
+		ConnPushHandler(func([]byte) {}),
 		ConnLastTime(givenTime),
 	)
 	ensure.Nil(t, err)
@@ -170,7 +170,7 @@ func TestConnPingInterval(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) {}),
+		ConnPushHandler(func([]byte) {}),
 		ConnPingInterval(pingInterval),
 	)
 	ensure.Nil(t, err)
@@ -184,7 +184,7 @@ func TestConnDialer(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) {}),
+		ConnPushHandler(func([]byte) {}),
 		ConnDialer(d),
 	)
 	ensure.Nil(t, err)
@@ -198,7 +198,7 @@ func TestConnTLSConfig(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) {}),
+		ConnPushHandler(func([]byte) {}),
 		ConnTLSConfig(tc),
 	)
 	ensure.Nil(t, err)
@@ -212,7 +212,7 @@ func TestConnAddr(t *testing.T) {
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
 		ConnInstallationID("x"),
-		ConnPushHandler(func(*Payload) {}),
+		ConnPushHandler(func([]byte) {}),
 		ConnAddr(addr),
 	)
 	ensure.Nil(t, err)
@@ -345,19 +345,13 @@ func TestDialErrorAndRetryRetryAndClose(t *testing.T) {
 
 func TestReadPushes(t *testing.T) {
 	in, out := net.Pipe()
-	pushes := make(chan *Payload, 2)
+	pushes := make(chan []byte, 2)
 
 	givenPush1 := []byte(`{"time":"2014-10-16T10:16:35.392Z","data":{"foo":"bar"}}`)
-	expectedPayload1 := &Payload{
-		Time: "2014-10-16T10:16:35.392Z",
-		Data: json.RawMessage(`{"foo":"bar"}`),
-	}
+	expectedPayload1 := []byte(`{"foo":"bar"}`)
 
 	givenPush2 := []byte(`{"time":"2014-10-16T10:16:36.402Z","data":{"bar":"baz"}}`)
-	expectedPayload2 := &Payload{
-		Time: "2014-10-16T10:16:36.402Z",
-		Data: json.RawMessage(`{"bar":"baz"}`),
-	}
+	expectedPayload2 := []byte(`{"bar":"baz"}`)
 
 	c := &Conn{
 		clock:        clock.New(),
@@ -366,7 +360,7 @@ func TestReadPushes(t *testing.T) {
 		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
 			return in, nil
 		},
-		pushHandler: func(p *Payload) { pushes <- p },
+		pushHandler: func(p []byte) { pushes <- p },
 	}
 	go io.Copy(ioutil.Discard, out)
 	go c.do()
@@ -378,7 +372,6 @@ func TestReadPushes(t *testing.T) {
 	}()
 	ensure.DeepEqual(t, <-pushes, expectedPayload1)
 	ensure.DeepEqual(t, <-pushes, expectedPayload2)
-	ensure.DeepEqual(t, c.LastTime(), expectedPayload2.Time)
 	ensure.Nil(t, c.Close())
 }
 

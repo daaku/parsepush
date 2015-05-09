@@ -36,7 +36,7 @@ var (
 // A payload contains the push payload. It includes a timestamp (which should be
 // persisted by the client and passed back in at connection time via
 // ConnLastTime) and the actual push data.
-type Payload struct {
+type payload struct {
 	Time string          `json:"time"`
 	Data json.RawMessage `json:"data"`
 }
@@ -50,7 +50,7 @@ type Conn struct {
 	installationID string
 	applicationID  string
 	lastTime       atomic.Value
-	pushHandler    func(*Payload)
+	pushHandler    func([]byte)
 	errHandler     func(error)
 	retry          func(int) time.Duration
 	closeOnce      sync.Once
@@ -142,19 +142,19 @@ func (c *Conn) do() {
 
 		select {
 		case push := <-lr.lines:
-			var payload Payload
-			if err := json.Unmarshal(push, &payload); err != nil {
+			var p payload
+			if err := json.Unmarshal(push, &p); err != nil {
 				handleErr(err)
 				break
 			}
 			// Ignore empty "{}" keep-alive response from server.
-			if len(payload.Time) == 0 && len(payload.Data) == 0 {
+			if len(p.Time) == 0 && len(p.Data) == 0 {
 				break
 			}
-			if payload.Time > c.LastTime() {
-				c.lastTime.Store(payload.Time)
+			if p.Time > c.LastTime() {
+				c.lastTime.Store(p.Time)
 			}
-			c.pushHandler(&payload)
+			c.pushHandler([]byte(p.Data))
 		case err := <-lr.errch:
 			handleErr(err)
 		case <-pingTicker.C:
@@ -256,7 +256,7 @@ func ConnLastTime(timestamp string) ConnOption {
 // ConnPushHandler configures the function that will be invoked when a push
 // arrives. The push handler is invoked synchronously so you should not perform
 // long running operations in this callback.
-func ConnPushHandler(handler func(payload *Payload)) ConnOption {
+func ConnPushHandler(handler func([]byte)) ConnOption {
 	return func(c *Conn) error {
 		c.pushHandler = handler
 		return nil

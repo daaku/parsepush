@@ -62,11 +62,11 @@ func TestIntegrate(t *testing.T) {
 	installationObjectID := res["objectId"]
 
 	// start push receiver connection
-	pushes := make(chan *parsepush.Payload)
+	pushes := make(chan []byte)
 	conn, err := parsepush.NewConn(
 		parsepush.ConnApplicationID(integrationApplicationID),
 		parsepush.ConnInstallationID(installationID),
-		parsepush.ConnPushHandler(func(p *parsepush.Payload) {
+		parsepush.ConnPushHandler(func(p []byte) {
 			pushes <- p
 		}),
 		parsepush.ConnErrorHandler(func(err error) {
@@ -90,7 +90,7 @@ func TestIntegrate(t *testing.T) {
 	payload := <-pushes
 	close(pushes)
 	push := make(map[string]interface{})
-	ensure.Nil(t, json.Unmarshal(payload.Data, &push))
+	ensure.Nil(t, json.Unmarshal(payload, &push))
 	ensure.Subset(t, push, givenPushData)
 
 	// close our push receiver and clean-up associated resources
