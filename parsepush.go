@@ -171,6 +171,10 @@ func (c *Conn) do() {
 }
 
 // LastTime returns the timestamp of the last push we received, if available.
+// This should be stored between the connection being closed and supplied using
+// ConnLastTime when setting up a connection if available. The suggested order
+// is to Close the connection and then retrive this value which is then
+// persisted.
 func (c *Conn) LastTime() string {
 	v, _ := c.lastTime.Load().(string)
 	return v
