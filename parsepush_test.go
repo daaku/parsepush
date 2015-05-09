@@ -385,11 +385,20 @@ func TestPushInvalidJSON(t *testing.T) {
 		pingInterval: time.Minute,
 		closeChan:    make(chan chan struct{}),
 		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
-			atomic.AddInt32(&dialCalls, 1)
-			return in, nil
+			switch atomic.AddInt32(&dialCalls, 1) {
+			case 1:
+				return in, nil
+			case 2:
+				in, out := net.Pipe()
+				go io.Copy(ioutil.Discard, out)
+				return in, nil
+			}
+			panic("not reached")
 		},
 		pushHandler: func(p []byte) { panic("never reached") },
-		errHandler:  func(err error) { errs <- err },
+		errHandler: func(err error) {
+			errs <- err
+		},
 		retry: func(int) time.Duration {
 			return time.Microsecond
 		},
