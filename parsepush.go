@@ -220,7 +220,7 @@ func ConnDialer(dialer *net.Dialer) ConnOption {
 }
 
 // ConnPingInterval configures the interval at which we send a ping on the
-// connection. Defaults to 1 minute.
+// connection. Defaults to 10 minutes.
 func ConnPingInterval(interval time.Duration) ConnOption {
 	return func(c *Conn) error {
 		c.pingInterval = interval
