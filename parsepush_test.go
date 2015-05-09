@@ -375,6 +375,36 @@ func TestReadPushes(t *testing.T) {
 	ensure.Nil(t, c.Close())
 }
 
+func TestPushInvalidJSON(t *testing.T) {
+	var dialCalls int32
+	errs := make(chan error, 1)
+	in, out := net.Pipe()
+	givenPush := []byte(`{"time":"2014-10-16T10`)
+	c := &Conn{
+		clock:        clock.New(),
+		pingInterval: time.Minute,
+		closeChan:    make(chan chan struct{}),
+		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+			atomic.AddInt32(&dialCalls, 1)
+			return in, nil
+		},
+		pushHandler: func(p []byte) { panic("never reached") },
+		errHandler:  func(err error) { errs <- err },
+		retry: func(int) time.Duration {
+			return time.Microsecond
+		},
+	}
+	go io.Copy(ioutil.Discard, out)
+	go c.do()
+	go func() {
+		out.Write(givenPush)
+		out.Write([]byte("\r\n"))
+	}()
+	ensure.Err(t, <-errs, regexp.MustCompile("unexpected end of JSON input"))
+	ensure.Nil(t, c.Close())
+	ensure.DeepEqual(t, atomic.LoadInt32(&dialCalls), int32(2))
+}
+
 func TestReadError(t *testing.T) {
 	errs := make(chan error, 2)
 	givenDialErr := errors.New("")
