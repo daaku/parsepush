@@ -33,6 +33,14 @@ var (
 	pingMessage = []byte("{}\r\n")
 )
 
+// A payload contains the push payload. It includes a timestamp (which should be
+// persisted by the client and passed back in at connection time via
+// ConnLastTime) and the actual push data.
+type Payload struct {
+	Time string          `json:"time"`
+	Data json.RawMessage `json:"data"`
+}
+
 // A Conn is a connection receiving pushes from Parse.
 type Conn struct {
 	addr           string
@@ -41,8 +49,8 @@ type Conn struct {
 	pingInterval   time.Duration
 	installationID string
 	applicationID  string
-	lastHash       atomic.Value
-	pushHandler    func([]byte)
+	lastTime       atomic.Value
+	pushHandler    func(*Payload)
 	errHandler     func(error)
 	retry          func(int) time.Duration
 	closeOnce      sync.Once
@@ -67,8 +75,8 @@ func (c *Conn) dial() net.Conn {
 		"oauth_key":       c.applicationID,
 		"v":               "e1.0.0",
 	}
-	if lastHash := c.LastHash(); lastHash != "" {
-		ir["last"] = lastHash
+	if lastTime := c.LastTime(); lastTime != "" {
+		ir["last"] = lastTime
 	}
 	irb, _ := json.Marshal(ir)
 	irb = append(irb, '\r', '\n')
@@ -134,7 +142,19 @@ func (c *Conn) do() {
 
 		select {
 		case push := <-lr.lines:
-			c.pushHandler(push)
+			var payload Payload
+			if err := json.Unmarshal(push, &payload); err != nil {
+				handleErr(err)
+				break
+			}
+			// Ignore empty "{}" keep-alive response from server.
+			if len(payload.Time) == 0 && len(payload.Data) == 0 {
+				break
+			}
+			if payload.Time > c.LastTime() {
+				c.lastTime.Store(payload.Time)
+			}
+			c.pushHandler(&payload)
 		case err := <-lr.errch:
 			handleErr(err)
 		case <-pingTicker.C:
@@ -150,9 +170,9 @@ func (c *Conn) do() {
 	}
 }
 
-// LastHash returns the hash of the last push we received, if available.
-func (c *Conn) LastHash() string {
-	v, _ := c.lastHash.Load().(string)
+// LastTime returns the timestamp of the last push we received, if available.
+func (c *Conn) LastTime() string {
+	v, _ := c.lastTime.Load().(string)
 	return v
 }
 
@@ -222,11 +242,13 @@ func ConnInstallationID(id string) ConnOption {
 	}
 }
 
-// ConnLastHash configures the hash of the last successful push we received.
-// This ensures we don't miss any relevant pushes since the last disconnect.
-func ConnLastHash(hash string) ConnOption {
+// ConnLastTime configures the timestamp of the last push we received. Although
+// this timestamp is currently an ISO8601 string, it should be treated as an
+// opaque string by the client. This ensures that we don't miss any relevant
+// pushes since the last disconnect.
+func ConnLastTime(timestamp string) ConnOption {
 	return func(c *Conn) error {
-		c.lastHash.Store(hash)
+		c.lastTime.Store(timestamp)
 		return nil
 	}
 }
@@ -234,7 +256,7 @@ func ConnLastHash(hash string) ConnOption {
 // ConnPushHandler configures the function that will be invoked when a push
 // arrives. The push handler is invoked synchronously so you should not perform
 // long running operations in this callback.
-func ConnPushHandler(handler func([]byte)) ConnOption {
+func ConnPushHandler(handler func(payload *Payload)) ConnOption {
 	return func(c *Conn) error {
 		c.pushHandler = handler
 		return nil
