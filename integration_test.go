@@ -94,5 +94,5 @@ func TestIntegrate(t *testing.T) {
 	ensure.Subset(t, push, givenPushData)
 
 	// close our push receiver and clean-up associated resources
-	conn.Close()
+	ensure.Nil(t, conn.Close())
 }
