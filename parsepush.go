@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,11 +42,13 @@ type payload struct {
 	Data json.RawMessage `json:"data"`
 }
 
+type dialer func(network, address string) (net.Conn, error)
+
 // A Conn is a connection receiving pushes from Parse.
 type Conn struct {
 	addr           string
 	tlsConfig      *tls.Config
-	dialer         *net.Dialer
+	dialer         dialer
 	pingInterval   time.Duration
 	installationID string
 	applicationID  string
@@ -58,7 +61,7 @@ type Conn struct {
 
 	// for testing purposes
 	clock clock.Clock
-	dialF func(*net.Dialer, string, string, *tls.Config) (net.Conn, error)
+	dialF func(dialer, string, string, *tls.Config) (net.Conn, error)
 }
 
 func (c *Conn) handleErr(err error) {
@@ -212,7 +215,7 @@ func ConnTLSConfig(config *tls.Config) ConnOption {
 
 // ConnDialer configures a Dialer. This allows for configuring timeouts etc.
 // The default dialer has a 1 minute timeout.
-func ConnDialer(dialer *net.Dialer) ConnOption {
+func ConnDialer(dialer func(network, address string) (net.Conn, error)) ConnOption {
 	return func(c *Conn) error {
 		c.dialer = dialer
 		return nil
@@ -318,9 +321,9 @@ func NewConn(options ...ConnOption) (*Conn, error) {
 		return nil, errMissingPushHandler
 	}
 	if c.dialer == nil {
-		c.dialer = &net.Dialer{
+		c.dialer = (&net.Dialer{
 			Timeout: defaultDialerTimeout,
-		}
+		}).Dial
 	}
 	if c.retry == nil {
 		c.retry = defaultRetry
@@ -375,14 +378,35 @@ func defaultRetry(int) time.Duration {
 }
 
 func defaultDialF(
-	dialer *net.Dialer,
+	dialer dialer,
 	network string,
 	addr string,
 	config *tls.Config,
-) (c net.Conn, err error) {
-	c, err = tls.DialWithDialer(dialer, network, addr, config)
+) (net.Conn, error) {
+	rawConn, err := dialer(network, addr)
 	if err != nil {
-		c = nil // remove type info
+		return nil, err
 	}
-	return c, err
+
+	if config == nil {
+		config = &tls.Config{}
+	}
+
+	// If no ServerName is set, infer the ServerName
+	// from the hostname we're connecting to.
+	if config.ServerName == "" {
+		colonPos := strings.LastIndex(addr, ":")
+		if colonPos == -1 {
+			colonPos = len(addr)
+		}
+		config.ServerName = addr[:colonPos]
+	}
+
+	conn := tls.Client(rawConn, config)
+	if err = conn.Handshake(); err != nil {
+		rawConn.Close()
+		return nil, err
+	}
+
+	return conn, nil
 }

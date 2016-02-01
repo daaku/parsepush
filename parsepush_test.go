@@ -68,9 +68,7 @@ func TestNewConnDefaults(t *testing.T) {
 	ensure.Nil(t, err)
 	ensure.DeepEqual(t, c.addr, defaultAddr)
 	ensure.DeepEqual(t, c.pingInterval, defaultPingInterval)
-	ensure.DeepEqual(t, c.dialer, &net.Dialer{
-		Timeout: defaultDialerTimeout,
-	})
+	ensure.NotNil(t, c.dialer)
 	go c.Close() // dont slow down the tests since this test hits the prod addr
 }
 
@@ -179,7 +177,7 @@ func TestConnPingInterval(t *testing.T) {
 }
 
 func TestConnDialer(t *testing.T) {
-	d := &net.Dialer{}
+	d := (&net.Dialer{}).Dial
 	c, err := NewConn(
 		ConnAddr(fakeAddr),
 		ConnApplicationID("x"),
@@ -188,7 +186,7 @@ func TestConnDialer(t *testing.T) {
 		ConnDialer(d),
 	)
 	ensure.Nil(t, err)
-	ensure.True(t, c.dialer == d)
+	ensure.NotNil(t, c.dialer)
 	ensure.Nil(t, c.Close())
 }
 
@@ -221,7 +219,7 @@ func TestConnAddr(t *testing.T) {
 }
 
 func TestDialSuccess(t *testing.T) {
-	givenDialer := &net.Dialer{}
+	givenDialer := (&net.Dialer{}).Dial
 	givenTLSConfig := &tls.Config{}
 	givenAddr := "42"
 	in, out := net.Pipe()
@@ -230,11 +228,11 @@ func TestDialSuccess(t *testing.T) {
 		tlsConfig: givenTLSConfig,
 		addr:      givenAddr,
 		dialF: func(
-			dialer *net.Dialer,
+			dialer dialer,
 			network, addr string,
 			config *tls.Config,
 		) (net.Conn, error) {
-			ensure.True(t, dialer == givenDialer)
+			ensure.NotNil(t, dialer)
 			ensure.True(t, network == "tcp")
 			ensure.True(t, addr == givenAddr)
 			ensure.True(t, config == givenTLSConfig)
@@ -263,7 +261,7 @@ func TestDialSuccess(t *testing.T) {
 func TestDialSuccessWithLastHash(t *testing.T) {
 	in, out := net.Pipe()
 	c := &Conn{
-		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+		dialF: func(dialer, string, string, *tls.Config) (net.Conn, error) {
 			return in, nil
 		},
 	}
@@ -297,7 +295,7 @@ func TestDialErrorAndRetryAndClose(t *testing.T) {
 	c = &Conn{
 		clock:     clock.NewMock(),
 		closeChan: make(chan chan struct{}),
-		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+		dialF: func(dialer, string, string, *tls.Config) (net.Conn, error) {
 			return nil, givenErr
 		},
 		retry: func(nth int) time.Duration {
@@ -324,7 +322,7 @@ func TestDialErrorAndRetryRetryAndClose(t *testing.T) {
 	c = &Conn{
 		clock:     mockClock,
 		closeChan: make(chan chan struct{}),
-		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+		dialF: func(dialer, string, string, *tls.Config) (net.Conn, error) {
 			return nil, errors.New("")
 		},
 		retry: func(nth int) time.Duration {
@@ -357,7 +355,7 @@ func TestReadPushes(t *testing.T) {
 		clock:        clock.New(),
 		pingInterval: time.Minute,
 		closeChan:    make(chan chan struct{}),
-		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+		dialF: func(dialer, string, string, *tls.Config) (net.Conn, error) {
 			return in, nil
 		},
 		pushHandler: func(p []byte) { pushes <- p },
@@ -384,7 +382,7 @@ func TestPushInvalidJSON(t *testing.T) {
 		clock:        clock.New(),
 		pingInterval: time.Minute,
 		closeChan:    make(chan chan struct{}),
-		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+		dialF: func(dialer, string, string, *tls.Config) (net.Conn, error) {
 			switch atomic.AddInt32(&dialCalls, 1) {
 			case 1:
 				return in, nil
@@ -422,7 +420,7 @@ func TestPingAndPush(t *testing.T) {
 		clock:        clock.New(),
 		pingInterval: time.Minute,
 		closeChan:    make(chan chan struct{}),
-		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+		dialF: func(dialer, string, string, *tls.Config) (net.Conn, error) {
 			atomic.AddInt32(&dialCalls, 1)
 			return in, nil
 		},
@@ -446,7 +444,7 @@ func TestReadError(t *testing.T) {
 		clock:        clock.New(),
 		pingInterval: time.Minute,
 		closeChan:    make(chan chan struct{}),
-		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+		dialF: func(dialer, string, string, *tls.Config) (net.Conn, error) {
 			switch atomic.AddInt32(&dialCount, 1) {
 			case 1:
 				return in, nil
@@ -485,7 +483,7 @@ func TestPingMessage(t *testing.T) {
 		pingInterval: time.Minute,
 		clock:        mockClock,
 		closeChan:    make(chan chan struct{}),
-		dialF: func(*net.Dialer, string, string, *tls.Config) (net.Conn, error) {
+		dialF: func(dialer, string, string, *tls.Config) (net.Conn, error) {
 			return in, nil
 		},
 		errHandler: func(err error) {
@@ -595,7 +593,7 @@ func TestDefautRetryInterval(t *testing.T) {
 }
 
 func TestDefaultDialF(t *testing.T) {
-	c, err := defaultDialF(&net.Dialer{}, "foo", "bar", nil)
+	c, err := defaultDialF((&net.Dialer{}).Dial, "foo", "bar", nil)
 	ensure.Nil(t, c)
 	ensure.Err(t, err, regexp.MustCompile("unknown network foo"))
 }
